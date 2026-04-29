@@ -27,6 +27,12 @@ interface DirectoryUser {
   team: string | null;
 }
 
+interface ReportingManagerOption {
+  user_id: string;
+  email: string;
+  name: string;
+}
+
 function employeeDisplayName(name: string | null | undefined, email: string): string {
   const n = typeof name === 'string' ? name.trim() : '';
   return n || email;
@@ -62,6 +68,7 @@ export default function AdminDashboardPage() {
   const [teamError, setTeamError] = useState<string | null>(null);
 
   const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
+  const [reportingManagers, setReportingManagers] = useState<ReportingManagerOption[]>([]);
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [managerSavingId, setManagerSavingId] = useState<string | null>(null);
@@ -136,23 +143,27 @@ export default function AdminDashboardPage() {
       setDirectoryLoading(true);
       setDirectoryError(null);
       try {
-        const { data } = await apiClient.get<
-          {
-            id: string;
-            email: string;
-            name?: string | null;
-            role: string;
-            manager_id: string | null;
-            team: string | null;
-          }[]
-        >('/admin/users');
+        const [usersRes, managersRes] = await Promise.all([
+          apiClient.get<
+            {
+              id: string;
+              email: string;
+              name?: string | null;
+              role: string;
+              manager_id: string | null;
+              team: string | null;
+            }[]
+          >('/admin/users'),
+          apiClient.get<ReportingManagerOption[]>('/admin/reporting-managers'),
+        ]);
         if (cancelled) return;
         setDirectoryUsers(
-          data.map((u) => ({
+          usersRes.data.map((u) => ({
             ...u,
             name: u.name ?? null,
           }))
         );
+        setReportingManagers(managersRes.data);
       } catch (e: unknown) {
         if (cancelled) return;
         const msg =
@@ -161,6 +172,7 @@ export default function AdminDashboardPage() {
             : undefined;
         setDirectoryError(typeof msg === 'string' ? msg : 'Failed to load users.');
         setDirectoryUsers([]);
+        setReportingManagers([]);
       } finally {
         if (!cancelled) setDirectoryLoading(false);
       }
@@ -419,6 +431,8 @@ export default function AdminDashboardPage() {
             <h2 className="text-lg font-semibold text-gray-900">Reporting managers</h2>
             <p className="text-sm text-gray-500">
               Assign each employee&apos;s manager so they can send EOD updates and mail from the app.
+              Only the six managers defined in the organization directory can be selected (users must exist
+              in the system for each directory email).
             </p>
           </div>
           {directoryLoading && (
@@ -468,18 +482,24 @@ export default function AdminDashboardPage() {
                     <td className="p-4">
                       <select
                         className="w-full max-w-md rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900"
-                        value={row.manager_id ?? ''}
+                        value={
+                          row.manager_id &&
+                          reportingManagers.some((m) => m.user_id === row.manager_id) &&
+                          row.manager_id !== row.id
+                            ? row.manager_id
+                            : ''
+                        }
                         disabled={managerSavingId === row.id}
                         onChange={(e) =>
                           void handleAssignManager(row.id, e.target.value)
                         }
                       >
                         <option value="">— None —</option>
-                        {directoryUsers
-                          .filter((u) => u.id !== row.id)
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {employeeDisplayName(u.name, u.email)}
+                        {reportingManagers
+                          .filter((m) => m.user_id !== row.id)
+                          .map((m) => (
+                            <option key={m.user_id} value={m.user_id}>
+                              {m.name}
                             </option>
                           ))}
                       </select>
