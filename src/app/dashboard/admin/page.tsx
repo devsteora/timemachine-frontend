@@ -10,6 +10,7 @@ import { UserPlus, Activity, Calendar, Clock, ShieldCheck, Network } from 'lucid
 interface TeamMember {
   id: string;
   email: string;
+  name: string | null;
   role: string;
   daysWorkedThisWeek: number;
   totalActiveHours: string;
@@ -20,9 +21,15 @@ interface TeamMember {
 interface DirectoryUser {
   id: string;
   email: string;
+  name: string | null;
   role: string;
   manager_id: string | null;
   team: string | null;
+}
+
+function employeeDisplayName(name: string | null | undefined, email: string): string {
+  const n = typeof name === 'string' ? name.trim() : '';
+  return n || email;
 }
 
 const TEAM_OPTIONS: { value: string; label: string }[] = [
@@ -44,6 +51,7 @@ export default function AdminDashboardPage() {
   
   // State for Access Management Form
   const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('EMPLOYEE');
   const [loading, setLoading] = useState(false);
@@ -80,6 +88,7 @@ export default function AdminDashboardPage() {
           {
             id: string;
             email: string;
+            name?: string | null;
             role: string;
             days_worked_this_week: number;
             total_active_hours: string;
@@ -92,6 +101,7 @@ export default function AdminDashboardPage() {
           data.map((row) => ({
             id: row.id,
             email: row.email,
+            name: row.name ?? null,
             role: row.role,
             daysWorkedThisWeek: row.days_worked_this_week,
             totalActiveHours: row.total_active_hours,
@@ -130,13 +140,19 @@ export default function AdminDashboardPage() {
           {
             id: string;
             email: string;
+            name?: string | null;
             role: string;
             manager_id: string | null;
             team: string | null;
           }[]
         >('/admin/users');
         if (cancelled) return;
-        setDirectoryUsers(data);
+        setDirectoryUsers(
+          data.map((u) => ({
+            ...u,
+            name: u.name ?? null,
+          }))
+        );
       } catch (e: unknown) {
         if (cancelled) return;
         const msg =
@@ -163,14 +179,17 @@ export default function AdminDashboardPage() {
 
     try {
       // Reusing the secure register endpoint to provision accounts
-      await apiClient.post('/auth/register', { 
-        email: newEmail, 
+      const trimmedName = newName.trim();
+      await apiClient.post('/auth/register', {
+        email: newEmail,
         password: newPassword,
-        role: newRole 
+        role: newRole,
+        ...(trimmedName ? { name: trimmedName } : {}),
       });
-      
+
       setMessage({ text: 'User access provisioned successfully.', type: 'success' });
       setNewEmail('');
+      setNewName('');
       setNewPassword('');
       setNewRole('EMPLOYEE');
     } catch (err: any) {
@@ -280,8 +299,14 @@ export default function AdminDashboardPage() {
               {teamData.map((member) => (
                 <tr key={member.id} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4">
-                    <div className="font-medium text-gray-900">{member.email}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{member.role}</div>
+                    <div className="font-medium text-gray-900">
+                      {employeeDisplayName(member.name, member.email)}
+                    </div>
+                    <div className="mt-0.5 text-xs text-gray-500">
+                      {member.name?.trim()
+                        ? `${member.email} · ${member.role}`
+                        : member.role}
+                    </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center space-x-2 text-gray-700">
@@ -339,7 +364,21 @@ export default function AdminDashboardPage() {
                 required
               />
             </div>
-            
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Display name <span className="font-normal text-gray-500">(optional)</span>
+              </label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-accent outline-none text-gray-900"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Jordan Smith"
+                maxLength={200}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
@@ -402,7 +441,12 @@ export default function AdminDashboardPage() {
                 {directoryUsers.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50">
                     <td className="p-4">
-                      <div className="font-medium text-gray-900">{row.email}</div>
+                      <div className="font-medium text-gray-900">
+                        {employeeDisplayName(row.name, row.email)}
+                      </div>
+                      {row.name?.trim() ? (
+                        <div className="mt-0.5 text-xs text-gray-500">{row.email}</div>
+                      ) : null}
                     </td>
                     <td className="p-4 text-gray-600">{row.role}</td>
                     <td className="p-4">
@@ -435,7 +479,7 @@ export default function AdminDashboardPage() {
                           .filter((u) => u.id !== row.id)
                           .map((u) => (
                             <option key={u.id} value={u.id}>
-                              {u.email}
+                              {employeeDisplayName(u.name, u.email)}
                             </option>
                           ))}
                       </select>
