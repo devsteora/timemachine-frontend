@@ -17,3 +17,11 @@ export interface User {
     status: 'ACTIVE' | 'IDLE' | 'SUSPICIOUS';
     score: number;
   }
+
+  export interface ActivityTimelineSegment {
+    id: string;
+    start_at: string;
+    end_at: string | null;
+    activity: string;
+    note: string | null;
+  }

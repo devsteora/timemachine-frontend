@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { TimelineChart } from '@/components/charts/TimelineChart';
-import { ActivityLog } from '@/types';
+import { ActivitySegmentTable } from '@/components/analytics/ActivitySegmentTable';
+import { ActivityLog, ActivityTimelineSegment } from '@/types';
 import { Activity, Coffee, Gauge } from 'lucide-react';
 import apiClient from '@/lib/axios';
 
@@ -15,6 +16,7 @@ function formatMinutes(total: number): string {
 
 interface TimelineApiResponse {
   logs: ActivityLog[];
+  segments: ActivityTimelineSegment[];
   active_minutes: number;
   idle_minutes: number;
   flagged_minutes: number;
@@ -23,6 +25,7 @@ interface TimelineApiResponse {
 
 export default function DashboardPage() {
   const [data, setData] = useState<ActivityLog[]>([]);
+  const [segments, setSegments] = useState<ActivityTimelineSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeMinutes, setActiveMinutes] = useState(0);
@@ -35,6 +38,7 @@ export default function DashboardPage() {
         '/activity/timeline'
       );
       setData(payload.logs);
+      setSegments(payload.segments ?? []);
       setActiveMinutes(payload.active_minutes);
       setIdleMinutes(payload.idle_minutes);
       setAvgScore(payload.avg_score);
@@ -180,6 +184,17 @@ export default function DashboardPage() {
               <TimelineChart data={data} />
             )}
           </div>
+          {!loading && data.length > 0 ? (
+            <div className="mt-8 border-t border-white/[0.06] pt-8">
+              <h3 className="text-base font-semibold text-white">Time details</h3>
+              <p className="mt-1 text-sm text-muted">
+                Merged blocks from your desktop agent (same idea as the app Time tab)
+              </p>
+              <div className="mt-4">
+                <ActivitySegmentTable segments={segments} />
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
